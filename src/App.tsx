@@ -48,7 +48,9 @@ function App() {
     if (!requireClient() || !form.email || !form.password || (mode === 'register' && (!form.fullName || !form.phone))) { if (!form.email || !form.password || (mode === 'register' && (!form.fullName || !form.phone))) fail('Complete all required fields to continue.'); return }
     setLoading(true)
     if (mode === 'register') {
-      const { error: authError } = await supabase!.auth.signUp({ email: form.email, password: form.password, options: { data: { full_name: form.fullName, phone: form.phone } } })
+      const { data: signupData, error: authError } = await supabase!.auth.signUp({ email: form.email, password: form.password, options: { data: { full_name: form.fullName, phone: form.phone } } })
+      const existingAccount = authError?.message.toLowerCase().includes('already registered') || authError?.message.toLowerCase().includes('already exists') || signupData.user?.identities?.length === 0
+      if (existingAccount) { fail('An account with this email already exists. Sign in instead.'); return }
       if (authError) { fail(authError.message); return }
       setLoading(false); go('otp')
     } else {
@@ -59,9 +61,9 @@ function App() {
       setLoading(false); go('personal')
     }
   }
-  const verifyOtp = async () => {
+  const verifyOtp = async (submittedOtp = otp.join('')) => {
     if (!requireClient()) return
-    const token = otp.join(''); if (token.length !== 6) { fail('Enter the 6-digit code from your email.'); return }
+    const token = submittedOtp; if (token.length !== 6) { fail('Enter the 6-digit code from your email.'); return }
     setLoading(true)
     const { data, error: verifyError } = await supabase!.auth.verifyOtp({ email: form.email, token, type: 'signup' })
     if (verifyError || !data.user) { fail(verifyError?.message || 'That code is invalid or expired. Request a new one and try again.'); return }
@@ -77,7 +79,7 @@ function App() {
   }
   const submitApplication = async () => { if (!requireClient() || !driverId) { fail('Your driver profile is not ready. Please sign in again.'); return }; setLoading(true); const { error: submitError } = await supabase!.from('drivers').update({ application_status: 'pending_review' }).eq('id', driverId); if (submitError) { fail(submitError.message); return }; setApplicationStatus('pending_review'); setLoading(false); go('complete') }
   const handleFile = (key: string, event: ChangeEvent<HTMLInputElement>) => { const file = event.target.files?.[0]; if (file) setFiles((current) => ({ ...current, [key]: file })) }
-  const setOtpDigit = (index: number, value: string) => { const digit = value.replace(/\D/g, '').slice(-1); setOtp((current) => current.map((item, itemIndex) => itemIndex === index ? digit : item)); if (digit && index < 5) document.getElementById(`otp-${index + 1}`)?.focus(); else if (!digit && index > 0) document.getElementById(`otp-${index - 1}`)?.focus() }
+  const setOtpDigit = (index: number, value: string) => { const digit = value.replace(/\D/g, '').slice(-1); const nextOtp = otp.map((item, itemIndex) => itemIndex === index ? digit : item); setOtp(nextOtp); if (digit && index < 5) document.getElementById(`otp-${index + 1}`)?.focus(); else if (!digit && index > 0) document.getElementById(`otp-${index - 1}`)?.focus(); if (nextOtp.every(Boolean)) void verifyOtp(nextOtp.join('')) }
   const currentIndex = steps.indexOf(step as typeof steps[number])
   if (step === 'complete') return <main className="complete-page"><div className="complete-mark"><Check size={32} /></div><p className="eyebrow">Application received</p><h1>You’re on your way.</h1><p className="complete-copy">Your driver application has been submitted. We’ll notify you by email once it has been reviewed.</p><div className="reference"><span>Application ID</span><strong>{driverId || 'Submitted'}</strong></div><div className="status-row"><span className="status-dot" /> {applicationStatus.replace('_', ' ')}</div></main>
   return <div className="app-shell"><aside className="sidebar"><div className="brand"><span className="brand-mark"><Truck size={20} /></span><span>takeoff</span></div><div className="sidebar-copy"><p className="eyebrow">Driver network</p><h2>Move with<br /><em>purpose.</em></h2><p>Join a trusted network moving people and possibility across the city.</p></div><div className="side-foot"><ShieldCheck size={16} /> Your data is encrypted and secure</div></aside><main className="main"><header className="topbar"><div className="mobile-brand"><span className="brand-mark"><Truck size={18} /></span> takeoff</div><span>Already have an account? <button className="link-button" onClick={() => { setMode('login'); go('account') }}>Sign in</button></span></header>{step !== 'account' && step !== 'otp' && <Stepper currentIndex={currentIndex} /> }<AnimatePresence mode="wait"><motion.section key={step} className="content" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: .22 }}>{step === 'account' && <Account mode={mode} setMode={setMode} form={form} update={update} error={error} loading={loading} submit={accountSubmit} />}{step === 'otp' && <Otp email={form.email} otp={otp} setOtpDigit={setOtpDigit} onContinue={verifyOtp} onBack={() => go('account')} loading={loading} error={error} resend={resendOtp} />}{step === 'personal' && <Personal form={form} update={update} onContinue={savePersonal} loading={loading} error={error} />}{step === 'identity' && <Identity files={files} handleFile={handleFile} onContinue={() => go('vehicle')} onBack={() => go('personal')} />}{step === 'vehicle' && <Vehicle form={form} update={update} onContinue={saveVehicle} onBack={() => go('identity')} loading={loading} error={error} />}{step === 'documents' && <Documents files={files} handleFile={handleFile} onContinue={uploadDocuments} onBack={() => go('vehicle')} loading={loading} error={error} />}{step === 'review' && <Review form={form} files={files} onEdit={go} onContinue={submitApplication} onBack={() => go('documents')} loading={loading} error={error} />}</motion.section></AnimatePresence></main></div>
