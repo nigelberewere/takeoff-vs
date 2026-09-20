@@ -9,7 +9,7 @@ type Step = 'account' | 'otp' | 'personal' | 'identity' | 'vehicle' | 'documents
 type FormData = Record<string, string>
 type FileData = Record<string, File>
 const steps = ['personal', 'identity', 'vehicle', 'documents', 'review'] as const
-const documentTypes: Record<string, string> = { idFront: 'national_id_front', idBack: 'national_id_back', selfie: 'selfie', license: 'license_front', registration: 'vehicle_registration', insurance: 'insurance' }
+const documentTypes: Record<string, string> = { idFront: 'national_id_front', idBack: 'national_id_back', selfie: 'selfie', license: 'license_front', licenseBack: 'license_back', registration: 'vehicle_registration', insurance: 'insurance' }
 
 function App() {
   const [step, setStep] = useState<Step>('account')
